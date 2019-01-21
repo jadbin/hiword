@@ -70,7 +70,7 @@ class IDFLoader:
         if idf_file is None:
             with idf_loader_lock:
                 if len(default_idf) > 0:
-                    return default_dict
+                    return default_idf
                 idf_file = join(dirname(__file__), 'data', 'idf.txt')
                 res = default_idf
                 read_idf()
