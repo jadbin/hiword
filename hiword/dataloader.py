@@ -11,8 +11,8 @@ idf_loader_lock = Lock()
 
 
 class DictLoader:
-    def __init__(self, dict_file):
-        self.dict = self._load_dict(dict_file)
+    def __init__(self, file=None):
+        self.dict = self._load_dict(file)
 
     def word_freq(self, word):
         if word in self.dict:
@@ -49,8 +49,8 @@ class DictLoader:
 
 
 class IDFLoader:
-    def __init__(self, idf_file):
-        self.idf = self._load_idf(idf_file)
+    def __init__(self, file=None):
+        self.idf = self._load_idf(file)
         self.median_idf = sorted(self.idf.values())[len(self.idf) // 2]
 
     def word_idf(self, word):

@@ -12,102 +12,99 @@ __all__ = ['KeywordsExtractor', 'extract_keywords']
 
 class KeywordsExtractor:
     NUMERIC = '0123456789〇一二三四五六七八九十百千万亿元角分'
+    tokenizer = None
 
-    def __init__(self, topk=20, min_support=2, dict_file=None, idf_file=None):
-        self.tokenizer = Tokenizer()
-        self.topk = topk
-        self.min_support = min_support
-        self.dict = DictLoader(dict_file)
-        self.idf = IDFLoader(idf_file)
+    def __init__(self):
+        cls = self.__class__
+        if cls.tokenizer is None:
+            cls.tokenizer = Tokenizer()
+        self.dict = DictLoader()
+        self.idf = IDFLoader()
 
-    def extract_keywords(self, *docs, topn=20, with_weight=False):
-        freq = defaultdict(lambda: 0)
-        doc_freq = defaultdict(lambda: 0)
-        for d in docs:
-            if isinstance(d, str):
-                words = []
-                for i in self.tokenizer.cut(d):
-                    w = i.strip()
-                    if len(w) == 0:
-                        continue
-                    words.append(w)
-            else:
-                words = d
-            keywords = self._extract_keywords_from_single_doc(words)
-            seg = self._detect_long_keywords(words, keywords)
-            f = defaultdict(lambda: 0)
-            for w in seg:
-                if self._filter_word(w):
+    def extract_keywords(self, doc, with_weight=False):
+        if isinstance(doc, str):
+            words = []
+            for i in self.tokenizer.cut(doc):
+                w = i.strip()
+                if len(w) == 0:
                     continue
-                f[w] = f[w] + 1
-            for k, v in f.items():
-                doc_freq[k] = doc_freq[k] + 1
-                freq[k] = freq[k] + v
+                words.append(w)
+        else:
+            words = doc
+        keywords = self._extract_keywords_from_single_doc(words)
+        long_words = self._detect_long_keywords(words, keywords)
+        freq = defaultdict(lambda: 0)
+        parts = defaultdict(lambda: 1)
+        for word, count in keywords:
+            if self._filter_word(word):
+                continue
+            freq[word] = freq[word] + count
+        for word, count, p in long_words:
+            if self._filter_word(word):
+                continue
+            freq[word] = freq[word] + count
+            parts[word] = p
+
         res = []
         for k in freq:
             s = freq[k] / (freq[k] + self.dict.word_freq(k))
-            s *= math.log2(freq[k] + 1) * math.log2(doc_freq[k] + 1)
-            s *= math.log2(1 + len(docs) / doc_freq[k])
+            s *= math.log2(freq[k] + 0.5)
+            s *= math.log2(parts[k] + 1)
             res.append((k, s))
         res.sort(key=lambda x: x[1], reverse=True)
-        res = res[:topn]
+        res = self._post_process_keywords(res)
         if with_weight:
             return res
         return [i[0] for i in res]
 
     def _detect_long_keywords(self, words, keywords):
-        if not isinstance(keywords, set):
-            keywords = set(keywords)
+        keywords = set([t[0] for t in keywords])
         appears = defaultdict(lambda: 0)
-        ran = []
-        w = []
+        parts = defaultdict(lambda: 1)
 
-        def commit():
-            i = 0
-            for i in range(len(w), 0, -1):
-                if self.dict.word_pos(w[i - 1]) not in ('v',):
+        def commit(continuous_words):
+            end_pos = 0
+            for end_pos in range(len(continuous_words), 0, -1):
+                if self.dict.word_pos(continuous_words[end_pos - 1]) not in ('v',):
                     break
-            if i > 0:
-                word = ''.join(w[:i])
-                appears[word] += 1
-                ran.append((cur - i, cur, word))
+            if end_pos > 0:
+                for i in range(0, end_pos - 1):
+                    word = ''.join(continuous_words[i:end_pos])
+                    appears[word] += 1
+                    parts[word] = end_pos - i
 
+        w = []
         for cur in range(0, len(words)):
             x = words[cur]
             if x in keywords:
                 w.append(x)
             elif w:
-                commit()
+                commit(w)
                 w = []
         if w:
-            commit()
+            commit(w)
 
-        seg = []
-        last = 0
-        for begin, end, word in ran:
-            if begin > last:
-                for i in range(last, begin):
-                    seg.append(words[i])
-            if appears[word] < self.min_support:
-                for i in range(begin, end):
-                    seg.append(words[i])
-            else:
-                seg.append(word)
-        for i in range(last, len(words)):
-            seg.append(words[i])
-        return seg
+        long_words = []
+        for word, count in appears.items():
+            # TODO: 合理计算阈值
+            if count >= 2:
+                long_words.append((word, count, parts[word]))
+        return long_words
 
     def _extract_keywords_from_single_doc(self, words):
-        freq = {}
+        freq = defaultdict(lambda: 0)
         for w in words:
             if len(w) < 2:
                 continue
-            freq[w] = freq.get(w, 0.0) + 1.0
+            freq[w] += 1
         total = sum(freq.values())
         for k in freq:
             freq[k] *= self.idf.word_idf(k) / total
         keywords = sorted(freq, key=freq.__getitem__, reverse=True)
-        return keywords[:self.topk]
+        keywords = [(k, freq[k]) for k in keywords]
+        topk = 20
+        # TODO: 根据文本长度等信息动态调整简单关键词的数量
+        return keywords[:topk]
 
     def _filter_word(self, w):
         def isnumber(v):
@@ -121,8 +118,6 @@ class KeywordsExtractor:
 
         if isnumber(w):
             return True
-        if len(w) <= 1:
-            return True
         nc = 0
         for i in w:
             if i in self.NUMERIC:
@@ -131,7 +126,16 @@ class KeywordsExtractor:
             return True
         return False
 
+    def _post_process_keywords(self, res):
+        n = 0
+        while n < len(res):
+            # TODO: 合理计算阈值
+            if res[n][1] < 0.005:
+                break
+            n += 1
+        return res[:n]
 
-def extract_keywords(*docs, topn=20, with_weight=False, **kwargs):
-    extractor = KeywordsExtractor(**kwargs)
-    return extractor.extract_keywords(*docs, topn=topn, with_weight=with_weight)
+
+def extract_keywords(doc, with_weight=False):
+    extractor = KeywordsExtractor()
+    return extractor.extract_keywords(doc, with_weight=with_weight)
