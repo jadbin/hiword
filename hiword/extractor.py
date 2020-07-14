@@ -88,9 +88,10 @@ class KeywordsExtractor:
             end_pos = len(continuous_words)
             if end_pos > 0:
                 for i in range(0, end_pos - 1):
-                    word = ''.join(continuous_words[i:end_pos])
-                    appears[word] += 1
-                    parts[word] = continuous_words[i:end_pos]
+                    for j in range(i + 2, end_pos + 1):
+                        word = ''.join(continuous_words[i:j])
+                        appears[word] += 1
+                        parts[word] = continuous_words[i:j]
 
         w = []
         for cur in range(0, len(words)):
