@@ -5,7 +5,7 @@ from collections import defaultdict
 
 from jieba import Tokenizer
 
-from hiword.dataloader import DictLoader, IDFLoader
+from hiword.dataloader import DictLoader, IDFLoader, StopwordsLoader
 
 __all__ = ['KeywordsExtractor', 'extract_keywords']
 
@@ -20,6 +20,7 @@ class KeywordsExtractor:
             cls.tokenizer = Tokenizer()
         self.dict = DictLoader()
         self.idf = IDFLoader()
+        self.stopwords = StopwordsLoader()
 
     def extract_keywords(self, doc, with_weight=False):
         if isinstance(doc, str):
@@ -34,25 +35,24 @@ class KeywordsExtractor:
         keywords = self._extract_keywords_from_single_doc(words)
         long_words = self._detect_long_keywords(words, keywords)
         freq = defaultdict(lambda: 0)
-        parts = defaultdict(lambda: 1)
         for word, count in keywords:
             if self._filter_word(word):
                 continue
-            freq[word] = freq[word] + count
+            freq[word] += count
         for word, count, p in long_words:
             if self._filter_word(word):
                 continue
-            freq[word] = freq[word] + count
-            parts[word] = p
+            freq[word] += count
 
         res = []
         for k in freq:
             s = freq[k] / (freq[k] + self.dict.word_freq(k))
             s *= math.log2(freq[k] + 0.5)
-            s *= math.log2(parts[k] + 1)
+            # TODO: 融合词汇本身的信息量
             res.append((k, s))
         res.sort(key=lambda x: x[1], reverse=True)
         res = self._post_process_keywords(res)
+
         if with_weight:
             return res
         return [i[0] for i in res]
@@ -60,18 +60,15 @@ class KeywordsExtractor:
     def _detect_long_keywords(self, words, keywords):
         keywords = set([t[0] for t in keywords])
         appears = defaultdict(lambda: 0)
-        parts = defaultdict(lambda: 1)
+        parts = defaultdict(list)
 
         def commit(continuous_words):
-            end_pos = 0
-            for end_pos in range(len(continuous_words), 0, -1):
-                if self.dict.word_pos(continuous_words[end_pos - 1]) not in ('v',):
-                    break
+            end_pos = len(continuous_words)
             if end_pos > 0:
                 for i in range(0, end_pos - 1):
                     word = ''.join(continuous_words[i:end_pos])
                     appears[word] += 1
-                    parts[word] = end_pos - i
+                    parts[word] = continuous_words[i:end_pos]
 
         w = []
         for cur in range(0, len(words)):
@@ -94,13 +91,14 @@ class KeywordsExtractor:
     def _extract_keywords_from_single_doc(self, words):
         freq = defaultdict(lambda: 0)
         for w in words:
-            if len(w) < 2:
+            if self.stopwords.is_stopword(w):
                 continue
             freq[w] += 1
         total = sum(freq.values())
+        tfidf = {}
         for k in freq:
-            freq[k] *= self.idf.word_idf(k) / total
-        keywords = sorted(freq, key=freq.__getitem__, reverse=True)
+            tfidf[k] = freq[k] * self.idf.word_idf(k) / total
+        keywords = sorted(tfidf, key=tfidf.__getitem__, reverse=True)
         keywords = [(k, freq[k]) for k in keywords]
         topk = 20
         # TODO: 根据文本长度等信息动态调整简单关键词的数量
@@ -130,7 +128,7 @@ class KeywordsExtractor:
         n = 0
         while n < len(res):
             # TODO: 合理计算阈值
-            if res[n][1] < 0.005:
+            if res[n][1] < 0.1:
                 break
             n += 1
         return res[:n]

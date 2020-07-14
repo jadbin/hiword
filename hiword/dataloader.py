@@ -1,6 +1,7 @@
 # coding=utf-8
 
-from os.path import join, dirname
+from os import listdir
+from os.path import join, dirname, isdir
 from multiprocessing import Lock
 
 default_dict = {}
@@ -8,6 +9,9 @@ dict_loader_lock = Lock()
 
 default_idf = {}
 idf_loader_lock = Lock()
+
+default_stopwords = set()
+stopwords_loader_lock = Lock()
 
 
 class DictLoader:
@@ -77,4 +81,43 @@ class IDFLoader:
         else:
             res = {}
             read_idf()
+        return res
+
+
+class StopwordsLoader:
+    def __init__(self, file=None):
+        self.stopwords = self._load_stopwords(file)
+
+    def is_stopword(self, word):
+        return word in self.stopwords
+
+    @staticmethod
+    def _load_stopwords(file):
+        def read_stopwords():
+            files = []
+            if isdir(file):
+                for fname in listdir(file):
+                    if fname.endswith('.txt'):
+                        files.append(join(file, fname))
+            else:
+                files.append(file)
+            for fname in files:
+                with open(fname) as f:
+                    while True:
+                        line = f.readline()
+                        if not line:
+                            break
+                        s = line.strip()
+                        res.add(s)
+
+        if file is None:
+            with stopwords_loader_lock:
+                if len(default_stopwords) > 0:
+                    return default_stopwords
+                file = join(dirname(__file__), 'data', 'stopwords')
+                res = default_stopwords
+                read_stopwords()
+        else:
+            res = set()
+            read_stopwords()
         return res
