@@ -51,7 +51,29 @@ class KeywordsExtractor:
             # TODO: 融合词汇本身的信息量
             res.append((k, s))
         res.sort(key=lambda x: x[1], reverse=True)
-        res = self._post_process_keywords(res)
+
+        def post_process():
+            n = 0
+            while n < len(res):
+                # TODO: 合理计算阈值
+                if res[n][1] < 0.1:
+                    break
+                n += 1
+            not_merge = res[:n]
+            merged = []
+            for i in range(len(not_merge)):
+                w1 = not_merge[i][0]
+                w1_ok = True
+                for j in range(len(not_merge)):
+                    w2 = not_merge[j][0]
+                    if len(w1) < len(w2) and w1 in w2 and freq[w1] == freq[w2]:
+                        w1_ok = False
+                        break
+                if w1_ok:
+                    merged.append(not_merge[i])
+            return merged
+
+        res = post_process()
 
         if with_weight:
             return res
@@ -123,15 +145,6 @@ class KeywordsExtractor:
         if nc * 2 >= len(w):
             return True
         return False
-
-    def _post_process_keywords(self, res):
-        n = 0
-        while n < len(res):
-            # TODO: 合理计算阈值
-            if res[n][1] < 0.1:
-                break
-            n += 1
-        return res[:n]
 
 
 def extract_keywords(doc, with_weight=False):
