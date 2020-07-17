@@ -6,6 +6,7 @@ from collections import defaultdict
 from jieba import Tokenizer
 
 from hiword.dataloader import DictLoader, IDFLoader, StopwordsLoader
+from hiword.zh_hans import traditional_to_simple
 
 __all__ = ['KeywordsExtractor', 'extract_keywords']
 
@@ -150,4 +151,6 @@ class KeywordsExtractor:
 
 def extract_keywords(doc, with_weight=False):
     extractor = KeywordsExtractor()
+    # 繁体转简体
+    doc = traditional_to_simple(doc)
     return extractor.extract_keywords(doc, with_weight=with_weight)
