@@ -32,7 +32,7 @@ class KeywordsExtractor:
     def extract_keywords(self, doc, with_weight=False):
         if isinstance(doc, str):
             words = []
-            for i in self.tokenizer.cut(doc):
+            for i in self.tokenizer.cut(doc, HMM=False):
                 w = i.strip()
                 if len(w) == 0:
                     continue
