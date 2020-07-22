@@ -14,14 +14,20 @@ __all__ = ['KeywordsExtractor', 'extract_keywords']
 class KeywordsExtractor:
     NUMERIC = '0123456789〇一二三四五六七八九十百千万亿元角分'
     tokenizer = None
+    dict = None
+    idf = None
+    stopwords = None
 
     def __init__(self):
         cls = self.__class__
         if cls.tokenizer is None:
             cls.tokenizer = Tokenizer()
-        self.dict = DictLoader()
-        self.idf = IDFLoader()
-        self.stopwords = StopwordsLoader()
+        if cls.dict is None:
+            cls.dict = DictLoader()
+        if cls.idf is None:
+            cls.idf = IDFLoader()
+        if cls.stopwords is None:
+            cls.stopwords = StopwordsLoader()
 
     def extract_keywords(self, doc, with_weight=False):
         if isinstance(doc, str):
