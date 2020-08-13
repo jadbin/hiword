@@ -1,7 +1,7 @@
 # coding=utf-8
 
-from hiword.extractor import *
+from hiword.extractor import KeywordsExtractor, extract_keywords
 
-__version__ = '0.2.5'
+__version__ = '0.2.6'
 
-__all__ = extractor.__all__
+__all__ = ['KeywordsExtractor', 'extract_keywords']

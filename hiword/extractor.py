@@ -8,8 +8,6 @@ from jieba import Tokenizer
 from hiword.dataloader import DictLoader, IDFLoader, StopwordsLoader
 from hiword.zh_hans import traditional_to_simple
 
-__all__ = ['KeywordsExtractor', 'extract_keywords']
-
 
 class KeywordsExtractor:
     NUMERIC = '0123456789〇一二三四五六七八九十百千万亿元角分'
