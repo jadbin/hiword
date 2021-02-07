@@ -61,7 +61,7 @@ class KeywordsExtractor:
             n = 0
             while n < len(res):
                 # TODO: 合理计算阈值
-                if res[n][1] < 0.1:
+                if res[n][1] < 0.05:
                     break
                 n += 1
             not_merge = res[:n]
@@ -127,8 +127,8 @@ class KeywordsExtractor:
         for k in freq:
             tfidf[k] = freq[k] * self.idf.word_idf(k) / total
         keywords = sorted(tfidf, key=tfidf.__getitem__, reverse=True)
-        keywords = [(k, freq[k]) for k in keywords]
-        topk = 20
+        keywords = [(k, freq[k]) for k in keywords if freq[k] > 1]
+        topk = 100
         # TODO: 根据文本长度等信息动态调整简单关键词的数量
         return keywords[:topk]
 
