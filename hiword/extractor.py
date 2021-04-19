@@ -1,33 +1,45 @@
-# coding=utf-8
-
 import math
 from collections import defaultdict
+from typing import Dict, List, Union
 
 from jieba import Tokenizer
 
 from hiword.dataloader import DictLoader, IDFLoader, StopwordsLoader
-from hiword.zh_hans import traditional_to_simple
+from hiword.filter import WordFilterChain, NumericFilter
+from hiword.utils import traditional_to_simple
 
 
 class KeywordsExtractor:
-    NUMERIC = '0123456789〇一二三四五六七八九十百千万亿元角分'
-    tokenizer = None
-    dict = None
-    idf = None
-    stopwords = None
-
     def __init__(self):
-        cls = self.__class__
-        if cls.tokenizer is None:
-            cls.tokenizer = Tokenizer()
-        if cls.dict is None:
-            cls.dict = DictLoader()
-        if cls.idf is None:
-            cls.idf = IDFLoader()
-        if cls.stopwords is None:
-            cls.stopwords = StopwordsLoader()
+        self.tokenizer = Tokenizer()
+        self.dict = DictLoader()
+        self.idf = IDFLoader()
+        self.stopwords = StopwordsLoader()
 
-    def extract_keywords(self, doc, with_weight=False):
+        self.word_filter = WordFilterChain(
+            NumericFilter(),
+        )
+
+    def extract_keywords(self, doc):
+        words = self._tokenize(doc)
+        keywords = self._extract_shot_keywords(words)
+        long_words = self._detect_long_keywords(words, keywords)
+
+        freq = defaultdict(lambda: 0)
+        for word, count in keywords:
+            if self.word_filter.filter(word):
+                continue
+            freq[word] += count
+        for word, count, _ in long_words:
+            if self.word_filter.filter(word):
+                continue
+            freq[word] += count
+
+        res = self._rerank_words(freq)
+        res = self._filter_included_words(res, freq)
+        return res
+
+    def _tokenize(self, doc: Union[str, List[str]]) -> List[str]:
         if isinstance(doc, str):
             words = []
             for i in self.tokenizer.cut(doc, HMM=False):
@@ -37,52 +49,22 @@ class KeywordsExtractor:
                 words.append(w)
         else:
             words = doc
-        keywords = self._extract_keywords_from_single_doc(words)
-        long_words = self._detect_long_keywords(words, keywords)
-        freq = defaultdict(lambda: 0)
-        for word, count in keywords:
-            if self._filter_word(word):
-                continue
-            freq[word] += count
-        for word, count, p in long_words:
-            if self._filter_word(word):
-                continue
-            freq[word] += count
+        return words
 
-        res = []
-        for k in freq:
-            s = freq[k] / (freq[k] + self.dict.word_freq(k))
-            s *= math.log2(freq[k] + 0.5)
-            # TODO: 融合词汇本身的信息量
-            res.append((k, s))
-        res.sort(key=lambda x: x[1], reverse=True)
-
-        def post_process():
-            n = 0
-            while n < len(res):
-                # TODO: 合理计算阈值
-                if res[n][1] < 0.05:
+    def _filter_included_words(self, words: list, freq: Dict[str, int]):
+        not_merge = words
+        merged = []
+        for i in range(len(not_merge)):
+            w1 = not_merge[i][0]
+            w1_ok = True
+            for j in range(len(not_merge)):
+                w2 = not_merge[j][0]
+                if len(w1) < len(w2) and w1 in w2 and freq[w1] == freq[w2]:
+                    w1_ok = False
                     break
-                n += 1
-            not_merge = res[:n]
-            merged = []
-            for i in range(len(not_merge)):
-                w1 = not_merge[i][0]
-                w1_ok = True
-                for j in range(len(not_merge)):
-                    w2 = not_merge[j][0]
-                    if len(w1) < len(w2) and w1 in w2 and freq[w1] == freq[w2]:
-                        w1_ok = False
-                        break
-                if w1_ok:
-                    merged.append(not_merge[i])
-            return merged
-
-        res = post_process()
-
-        if with_weight:
-            return res
-        return [i[0] for i in res]
+            if w1_ok:
+                merged.append(not_merge[i])
+        return merged
 
     def _detect_long_keywords(self, words, keywords):
         keywords = set([t[0] for t in keywords])
@@ -116,45 +98,40 @@ class KeywordsExtractor:
                 long_words.append((word, count, parts[word]))
         return long_words
 
-    def _extract_keywords_from_single_doc(self, words):
+    def _extract_shot_keywords(self, words) -> list:
         freq = defaultdict(lambda: 0)
         for w in words:
             if self.stopwords.is_stopword(w):
                 continue
             freq[w] += 1
-        total = sum(freq.values())
         tfidf = {}
         for k in freq:
-            tfidf[k] = freq[k] * self.idf.word_idf(k) / total
+            tfidf[k] = freq[k] * self.idf.word_idf(k)
         keywords = sorted(tfidf, key=tfidf.__getitem__, reverse=True)
         keywords = [(k, freq[k]) for k in keywords if freq[k] > 1]
         topk = 100
         # TODO: 根据文本长度等信息动态调整简单关键词的数量
         return keywords[:topk]
 
-    def _filter_word(self, w):
-        def isnumber(v):
-            if v:
-                v = v.strip('%')
-            try:
-                v = float(v)
-            except ValueError:
-                return False
-            return True
+    def _rerank_words(self, freq: Dict[str, int]) -> list:
+        res = []
+        for k in freq:
+            s = math.log2(freq[k] + 0.5) * (freq[k] / (freq[k] + self.dict.word_freq(k)))
+            # TODO: 融合词汇本身的信息量
+            res.append((k, s))
+        res.sort(key=lambda x: x[1], reverse=True)
+        return res
 
-        if isnumber(w):
-            return True
-        nc = 0
-        for i in w:
-            if i in self.NUMERIC:
-                nc += 1
-        if nc * 2 >= len(w):
-            return True
-        return False
+
+_keywords_extractor = None
 
 
 def extract_keywords(doc, with_weight=False):
-    extractor = KeywordsExtractor()
+    global _keywords_extractor
+    if _keywords_extractor is None:
+        _keywords_extractor = KeywordsExtractor()
     # 繁体转简体
     doc = traditional_to_simple(doc)
-    return extractor.extract_keywords(doc, with_weight=with_weight)
+    keywords = _keywords_extractor.extract_keywords(doc)
+    keywords = [k if with_weight else k[0] for k in keywords if k[1] >= 0.1]
+    return keywords

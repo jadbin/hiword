@@ -1,5 +1,3 @@
-# coding=utf-8
-
 from hiword import extract_keywords
 
 docs = [
