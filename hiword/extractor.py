@@ -1,4 +1,5 @@
 import math
+import re
 from collections import defaultdict
 from typing import Dict, List, Union
 
@@ -125,6 +126,8 @@ class KeywordsExtractor:
 
 _keywords_extractor = None
 
+_illegal = re.compile(r'[^\u4e00-\u9fa5a-zA-Z0-9}]')
+
 
 def extract_keywords(doc, with_weight=False):
     global _keywords_extractor
@@ -132,6 +135,8 @@ def extract_keywords(doc, with_weight=False):
         _keywords_extractor = KeywordsExtractor()
     # 繁体转简体
     doc = traditional_to_simple(doc)
+    # 过滤无效字符
+    doc = _illegal.sub('.', doc)
     keywords = _keywords_extractor.extract_keywords(doc)
     keywords = [k if with_weight else k[0] for k in keywords if k[1] >= 0.1]
     return keywords
