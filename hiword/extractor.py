@@ -22,7 +22,7 @@ class KeywordsExtractor:
 
     def extract_keywords(self, doc):
         words = self._tokenize(doc)
-        keywords = self._extract_shot_keywords(words)
+        keywords = self._extract_short_keywords(words)
         long_words = self._detect_long_keywords(words, keywords)
 
         freq = defaultdict(lambda: 0)
@@ -36,7 +36,11 @@ class KeywordsExtractor:
             freq[word] += count
 
         res = self._rerank_words(freq)
-        res = self._filter_included_words(res, freq)
+        res = self._filter_subwords(res, freq)
+
+        # FIXME: 根据经验设置的权重阈值
+        min_weight = 0.1
+        res = [k for k in res if k[1] >= min_weight]
         return res
 
     def _tokenize(self, doc: Union[str, List[str]]) -> List[str]:
@@ -51,7 +55,7 @@ class KeywordsExtractor:
             words = doc
         return words
 
-    def _filter_included_words(self, words: list, freq: Dict[str, int]):
+    def _filter_subwords(self, words: list, freq: Dict[str, int]):
         not_merge = words
         merged = []
         for i in range(len(not_merge)):
@@ -93,12 +97,12 @@ class KeywordsExtractor:
 
         long_words = []
         for word, count in appears.items():
-            # TODO: 合理计算阈值
+            # FIXME: 合理计算阈值
             if count >= 2:
                 long_words.append((word, count, parts[word]))
         return long_words
 
-    def _extract_shot_keywords(self, words) -> list:
+    def _extract_short_keywords(self, words) -> list:
         freq = defaultdict(lambda: 0)
         for w in words:
             if self.stopwords.is_stopword(w):
@@ -109,15 +113,15 @@ class KeywordsExtractor:
             tfidf[k] = freq[k] * self.idf.word_idf(k)
         keywords = sorted(tfidf, key=tfidf.__getitem__, reverse=True)
         keywords = [(k, freq[k]) for k in keywords if freq[k] > 1]
-        topk = 100
-        # TODO: 根据文本长度等信息动态调整简单关键词的数量
+        topk = 500
+        # FIXME: 根据文本长度等信息动态调整简单关键词的数量
         return keywords[:topk]
 
     def _rerank_words(self, freq: Dict[str, int]) -> list:
         res = []
         for k in freq:
             s = math.log2(freq[k] + 0.5) * (freq[k] / (freq[k] + self.dict.word_freq(k)))
-            # TODO: 融合词汇本身的信息量
+            # FIXME: 融合词汇本身的信息量
             res.append((k, s))
         res.sort(key=lambda x: x[1], reverse=True)
         return res
@@ -135,5 +139,6 @@ def extract_keywords(doc, with_weight=False):
     # 过滤无效字符
     doc = filter_invalid_chars(doc)
     keywords = _keywords_extractor.extract_keywords(doc)
-    keywords = [k if with_weight else k[0] for k in keywords if k[1] >= 0.1]
+    if not with_weight:
+        keywords = [k[0] for k in keywords]
     return keywords
