@@ -1,5 +1,4 @@
 import math
-import re
 from collections import defaultdict
 from typing import Dict, List, Union
 
@@ -7,7 +6,7 @@ from jieba import Tokenizer
 
 from hiword.dataloader import DictLoader, IDFLoader, StopwordsLoader
 from hiword.filter import WordFilterChain, NumericFilter
-from hiword.utils import traditional_to_simple
+from hiword.utils import traditional_to_simple, filter_invalid_chars
 
 
 class KeywordsExtractor:
@@ -126,8 +125,6 @@ class KeywordsExtractor:
 
 _keywords_extractor = None
 
-_illegal = re.compile(r'[^\u4e00-\u9fa5a-zA-Z0-9}]')
-
 
 def extract_keywords(doc, with_weight=False):
     global _keywords_extractor
@@ -136,7 +133,7 @@ def extract_keywords(doc, with_weight=False):
     # 繁体转简体
     doc = traditional_to_simple(doc)
     # 过滤无效字符
-    doc = _illegal.sub('.', doc)
+    doc = filter_invalid_chars(doc)
     keywords = _keywords_extractor.extract_keywords(doc)
     keywords = [k if with_weight else k[0] for k in keywords if k[1] >= 0.1]
     return keywords
