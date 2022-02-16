@@ -1,8 +1,7 @@
-# coding=utf-8
-
 import re
 import sys
 from os.path import join, dirname
+
 from setuptools import setup, find_packages
 from setuptools.command.test import test as TestCommand
 
@@ -30,7 +29,9 @@ class PyTest(TestCommand):
 
 
 tests_require = read_requirements('test.txt')
-install_requires = ['jieba>=0.39']
+install_requires = [
+    'lac>=2.1.2',
+]
 
 
 def main():

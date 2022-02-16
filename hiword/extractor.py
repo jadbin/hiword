@@ -2,7 +2,7 @@ import math
 from collections import defaultdict
 from typing import Dict, List, Union
 
-from jieba import Tokenizer
+from LAC import LAC
 
 from hiword.dataloader import DictLoader, IDFLoader, StopwordsLoader
 from hiword.filter import WordFilterChain, NumericFilter
@@ -11,7 +11,7 @@ from hiword.utils import traditional_to_simple, filter_invalid_chars
 
 class KeywordsExtractor:
     def __init__(self):
-        self.tokenizer = Tokenizer()
+        self.lac = LAC(mode='seg')
         self.dict = DictLoader()
         self.idf = IDFLoader()
         self.stopwords = StopwordsLoader()
@@ -46,7 +46,7 @@ class KeywordsExtractor:
     def _tokenize(self, doc: Union[str, List[str]]) -> List[str]:
         if isinstance(doc, str):
             words = []
-            for i in self.tokenizer.cut(doc, HMM=False):
+            for i in self.lac.run(doc):
                 w = i.strip()
                 if len(w) == 0:
                     continue
