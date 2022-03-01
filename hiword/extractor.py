@@ -127,13 +127,10 @@ class KeywordsExtractor:
         return res
 
 
-_keywords_extractor = None
+_keywords_extractor = KeywordsExtractor()
 
 
 def extract_keywords(doc, with_weight=False):
-    global _keywords_extractor
-    if _keywords_extractor is None:
-        _keywords_extractor = KeywordsExtractor()
     # 繁体转简体
     doc = traditional_to_simple(doc)
     # 过滤无效字符
