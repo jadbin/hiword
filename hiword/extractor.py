@@ -69,12 +69,12 @@ class KeywordsExtractor:
                 merged.append((words[i][0], words[i][1]))
         return merged
 
-    def _detect_long_keywords(self, words, keywords):
-        keywords = set(keywords)
+    def _detect_long_keywords(self, words, short_words):
+        keywords = set([k for k, _ in short_words])
         appears = {}
 
         a = []
-        for w in enumerate(words):
+        for w in words:
             if w in keywords:
                 a.append(w)
             elif a:
