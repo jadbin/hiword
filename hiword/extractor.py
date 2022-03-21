@@ -10,6 +10,8 @@ from hiword.utils import traditional_to_simple, filter_invalid_chars
 
 
 class KeywordsExtractor:
+    MIN_WORD_FREQ = 3
+
     def __init__(self):
         self.lac = LAC(mode='seg')
         self.dict = DictLoader()
@@ -26,11 +28,11 @@ class KeywordsExtractor:
         long_words = self._detect_long_keywords(words, keywords)
 
         freq = defaultdict(lambda: 0)
-        for word, count in keywords:
+        for word, count in keywords.items():
             if self.word_filter.filter(word):
                 continue
             freq[word] += count
-        for word, count in long_words:
+        for word, count in long_words.items():
             if self.word_filter.filter(word):
                 continue
             freq[word] += count
@@ -55,7 +57,7 @@ class KeywordsExtractor:
             words = doc
         return words
 
-    def _filter_subwords(self, words: list, freq: Dict[str, int]):
+    def _filter_subwords(self, words: list, freq: Dict[str, int]) -> list:
         merged = []
         for i in range(len(words)):
             w1 = words[i][0]
@@ -66,16 +68,15 @@ class KeywordsExtractor:
                     w1_ok = False
                     break
             if w1_ok:
-                merged.append((words[i][0], words[i][1]))
+                merged.append([w1, words[i][1]])
         return merged
 
-    def _detect_long_keywords(self, words, short_words):
-        keywords = set([k for k, _ in short_words])
+    def _detect_long_keywords(self, words: list, short_words: dict) -> dict:
         appears = {}
 
         a = []
         for w in words:
-            if w in keywords:
+            if w in short_words:
                 a.append(w)
             elif a:
                 self._commit_continuous_words(a, appears)
@@ -83,11 +84,10 @@ class KeywordsExtractor:
         if a:
             self._commit_continuous_words(a, appears)
 
-        long_words = []
+        long_words = {}
         for word, count in appears.items():
-            # FIXME: 合理计算阈值
-            if count >= 2:
-                long_words.append((word, count))
+            if count >= self.MIN_WORD_FREQ:
+                long_words[word] = count
         return long_words
 
     def _commit_continuous_words(self, continuous_words: list, appears: dict):
@@ -101,7 +101,7 @@ class KeywordsExtractor:
                     else:
                         appears[word] = 1
 
-    def _extract_short_keywords(self, words) -> list:
+    def _extract_short_keywords(self, words) -> dict:
         freq = {}
         for w in words:
             if self.stopwords.is_stopword(w):
@@ -117,15 +117,15 @@ class KeywordsExtractor:
 
         t = []
         for w in tfidf:
-            t.append((w, tfidf[w]))
+            t.append([w, tfidf[w]])
         t.sort(key=lambda x: x[1], reverse=True)
 
         topk = 500
         # FIXME: 根据文本长度等信息动态调整简单关键词的数量
-        result = []
+        result = {}
         for w, _ in t:
-            if freq[w] > 1:
-                result.append((w, freq[w]))
+            if freq[w] >= self.MIN_WORD_FREQ:
+                result[w] = freq[w]
             if len(result) >= topk:
                 break
         return result
@@ -135,7 +135,7 @@ class KeywordsExtractor:
         for k in freq:
             s = math.log2(freq[k] + 0.5) * (freq[k] / (freq[k] + self.dict.word_freq(k)))
             # FIXME: 融合词汇本身的信息量
-            res.append((k, s))
+            res.append([k, s])
         res.sort(key=lambda x: x[1], reverse=True)
         return res
 
