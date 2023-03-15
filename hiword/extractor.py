@@ -1,8 +1,7 @@
 import math
 from collections import defaultdict
+from functools import partial
 from typing import Dict, List, Union
-
-from LAC import LAC
 
 from hiword.dataloader import DictLoader, IDFLoader, StopwordsLoader
 from hiword.filter import WordFilterChain, NumericFilter
@@ -13,7 +12,19 @@ class KeywordsExtractor:
     MIN_WORD_FREQ = 3
 
     def __init__(self):
-        self.lac = LAC(mode='seg')
+        self.lac = None
+        try:
+            from LAC import LAC
+            self.lac = LAC(mode='seg')
+        except ImportError:
+            pass
+        self.tokenizer = None
+        try:
+            from jieba import Tokenizer
+            self.tokenizer = Tokenizer()
+        except ImportError:
+            pass
+
         self.dict = DictLoader()
         self.idf = IDFLoader()
         self.stopwords = StopwordsLoader()
@@ -47,8 +58,13 @@ class KeywordsExtractor:
 
     def _tokenize(self, doc: Union[str, List[str]]) -> List[str]:
         if isinstance(doc, str):
+            if self.lac:
+                func = self.lac.run
+            else:
+                func = partial(self.tokenizer.cut, HMM=False)
+
             words = []
-            for i in self.lac.run(doc):
+            for i in func(doc):
                 w = i.strip()
                 if len(w) == 0:
                     continue

@@ -30,8 +30,13 @@ class PyTest(TestCommand):
 
 tests_require = read_requirements('test.txt')
 install_requires = [
-    'lac>=2.1.2',
+    'jieba>=0.42.1',
 ]
+extras_require = {
+    'lac': [
+        'lac>=2.1.2',
+    ]
+}
 
 
 def main():
@@ -52,6 +57,7 @@ def main():
         include_package_data=True,
         python_requires='>=3.5',
         install_requires=install_requires,
+        extras_require=extras_require,
         tests_require=tests_require,
         cmdclass={"test": PyTest},
         classifiers=[
